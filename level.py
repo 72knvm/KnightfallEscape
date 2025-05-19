@@ -1,6 +1,7 @@
 import pygame
 from platform import Platform, Item
 import random
+from goblin import Goblin
 
 class SimplePlatform(pygame.sprite.Sprite):
     def __init__(self, x, y, width, height):
@@ -9,9 +10,12 @@ class SimplePlatform(pygame.sprite.Sprite):
         self.image.fill((169, 169, 169))  # Warna abu-abu untuk platform
         self.rect = self.image.get_rect(topleft=(x, y))
 
+MAX_LEVEL_WIDTH = 20000  # pastikan ini nilai level kamu sesuai
+
 class Level:
-    def __init__(self, level_number):
+    def __init__(self, level_number, player):
         self.level_number = level_number
+        self.player = player  # Simpan objek player yang diterima
         self.platforms = pygame.sprite.Group()
         self.items = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
@@ -28,6 +32,66 @@ class Level:
         elif 11 <= self.level_number <= 15:
             return "outside"
         return "unknown"
+
+    def find_platform_y(self, x_pos):
+            for platform in self.platforms:
+                if platform.rect.left <= x_pos <= platform.rect.right:
+                    return platform.rect.top
+            return 550  # fallback ke tanah jika tidak ketemu
+
+    def spawn_goblin(self, x, variant):
+        # Batasi posisi spawn agar valid dan di dalam level
+        if x < 0 or x > MAX_LEVEL_WIDTH:
+            print(f"[WARNING] Goblin spawn di luar batas level: x={x}")
+            return
+
+        y = self.find_platform_y(x) - 60  # tinggi Goblin
+
+        goblin = Goblin(x, y, pygame.Surface((40, 60)), variant=variant)
+        color = (255, 165, 0) if variant == "knight" else (0, 255, 255)
+        goblin.image.fill(color)
+        self.enemies.add(goblin)
+
+    def spawn_random_goblins(self, count=5):
+        self.enemies.empty()
+
+        platform_list = [p for p in self.platforms if getattr(p, "spawnable", True)]
+
+        if not platform_list:
+            print("[WARNING] Tidak ada platform valid untuk spawn Goblin.")
+            return
+
+        knight_count = count // 2
+        archer_count = count - knight_count
+        variants = ["knight"] * knight_count + ["archer"] * archer_count
+        random.shuffle(variants)  # biar urutan spawn acak
+
+        for variant in variants:
+            platform = random.choice(platform_list)
+            x_pos = random.randint(platform.rect.left, platform.rect.right)
+            y_pos = platform.rect.top - 60
+
+            goblin = Goblin(x_pos, y_pos, pygame.Surface((40, 60)), variant=variant)
+
+            if variant == "knight":
+                goblin.image.fill((255, 165, 0))  # oranye
+            else:
+                goblin.image.fill((0, 255, 255))  # cyan
+
+            self.enemies.add(goblin)
+
+    def _add_enemies(self):
+        if self.level_number == 1:
+            self.spawn_random_goblins(count=3)
+        elif self.level_number == 2:
+            self.spawn_random_goblins(count=4)
+        elif self.level_number == 3:
+            self.spawn_random_goblins(count=5)
+        elif self.level_number == 4:
+            self.spawn_random_goblins(count=6)
+        elif self.level_number == 5:
+            self.spawn_random_goblins(count=7)
+
 
     def build_level(self):
         if self.level_number == 1:
@@ -52,6 +116,7 @@ class Level:
     def build_level_1(self):
         self.platforms.empty()
         self.items.empty()
+        self.enemies.empty()  # Bersihkan grup musuh dulu
 
         weighted_blocks = [
             (block_flat_corridor, 1),
@@ -67,7 +132,7 @@ class Level:
             return random.choices(blocks, weights=weights, k=k)
 
         def short_flat(x):
-            return [Platform(x, 550, 500, 50)], [], 500
+            return [Platform(x, 550, 500, 50, spawnable=False)], [], 500
 
         core_blocks = weighted_choice(weighted_blocks, k=5)
         x_offset = 0
@@ -83,7 +148,6 @@ class Level:
             self.items.add(*items)
             x_offset += width
 
-        
         outro_platforms, outro_items, outro_width = short_flat(x_offset)
         self.platforms.add(*outro_platforms)
         self.items.add(*outro_items)
@@ -94,12 +158,22 @@ class Level:
         self.items.add(*portal_items)
         x_offset += portal_width
 
-        
         self.platforms.add(*outro_platforms)
         self.items.add(*outro_items)
         x_offset += outro_width
 
-        print("Level 1 built with intro, core challenges, and outro.")
+        # --- Spawn musuh Goblin di posisi platform yang sesuai ---
+
+        # Fungsi bantu cari platform berdasarkan x Goblin
+        def find_platform_y(x_pos):
+            for platform in self.platforms:
+                if platform.rect.left <= x_pos <= platform.rect.right:
+                    return platform.rect.top
+            return 550  # fallback ke tanah jika tidak ketemu
+
+        self._add_enemies()
+
+        print("Level 1 dengan musuh Goblin sudah dibuat")
 
     def build_level_2(self):
         self.platforms.empty()
@@ -119,7 +193,7 @@ class Level:
             return random.choices(blocks, weights=weights, k=k)
 
         def short_flat(x):
-            return [Platform(x, 550, 500, 50)], [], 500
+            return [Platform(x, 550, 500, 50, spawnable=False)], [], 500
 
         core_blocks = weighted_choice(weighted_blocks, k=6)
         x_offset = 0
@@ -145,7 +219,15 @@ class Level:
         self.items.add(*portal_items)
         x_offset += portal_width
 
-        print("Level 2 built with intro, challenges, outro, and portal.")
+        def find_platform_y(x_pos):
+            for platform in self.platforms:
+                if platform.rect.left <= x_pos <= platform.rect.right:
+                    return platform.rect.top
+            return 550  # fallback ke tanah jika tidak ketemu
+
+        self._add_enemies()
+
+        print("Level 2")
 
     def build_level_3(self):
         self.platforms.empty()
@@ -165,7 +247,7 @@ class Level:
             return random.choices(blocks, weights=weights, k=k)
 
         def short_flat(x):
-            return [Platform(x, 550, 500, 50)], [], 500
+            return [Platform(x, 550, 500, 50, spawnable=False)], [], 500
 
         core_blocks = weighted_choice(weighted_blocks, k=8)
         x_offset = 0
@@ -191,7 +273,15 @@ class Level:
         self.items.add(*portal_items)
         x_offset += portal_width
 
-        print("Level 3 built with increased challenge and portal.")
+        def find_platform_y(x_pos):
+            for platform in self.platforms:
+                if platform.rect.left <= x_pos <= platform.rect.right:
+                    return platform.rect.top
+            return 550  # fallback ke tanah jika tidak ketemu
+
+        self._add_enemies()
+
+        print("Level 3")
 
     def build_level_4(self):
         self.platforms.empty()
@@ -211,7 +301,7 @@ class Level:
             return random.choices(blocks, weights=weights, k=k)
 
         def short_flat(x):
-            return [Platform(x, 550, 500, 50)], [], 500
+            return [Platform(x, 550, 500, 50, spawnable=False)], [], 500
 
         core_blocks = weighted_choice(weighted_blocks, k=10)
         x_offset = 0
@@ -237,7 +327,15 @@ class Level:
         self.items.add(*portal_items)
         x_offset += portal_width
 
-        print("Level 4 rebuilt with higher challenge and clean intro/outro/portal.")
+        def find_platform_y(x_pos):
+            for platform in self.platforms:
+                if platform.rect.left <= x_pos <= platform.rect.right:
+                    return platform.rect.top
+            return 550  # fallback ke tanah jika tidak ketemu
+
+        self._add_enemies()
+
+        print("Level 4")
 
     def build_level_5(self):
         self.platforms.empty()
@@ -258,7 +356,7 @@ class Level:
             return random.choices(blocks, weights=weights, k=k)
 
         def short_flat(x):
-            return [Platform(x, 550, 500, 50)], [], 500
+            return [Platform(x, 550, 500, 50, spawnable=False)], [], 500
 
         core_blocks = weighted_choice(weighted_blocks, k=12)
         x_offset = 0
@@ -293,7 +391,15 @@ class Level:
         self.items.add(*portal_items)
         x_offset += portal_width
 
-        print("Level 5 built with challenges and portal to Shaman boss room.")
+        def find_platform_y(x_pos):
+            for platform in self.platforms:
+                if platform.rect.left <= x_pos <= platform.rect.right:
+                    return platform.rect.top
+            return 550  # fallback ke tanah jika tidak ketemu
+
+        self._add_enemies()
+
+        print("Level 5")
 
     def build_level_shaman(self):
         self.platforms.empty()
@@ -340,7 +446,7 @@ class Level:
         wall_right = Platform(boss_room_x + boss_room_width - 30, boss_room_y + boss_room_height - 150, 30, boss_room_height)
         self.platforms.add(wall_right)
 
-        print("Shaman Boss Room built with corridor and boss room.")
+        print("Shaman Boss Room")
         
     def _add_items(self):
         if self.level_number == 4:
@@ -352,34 +458,19 @@ class Level:
         elif self.level_number == 14:
             self.items.add(Item(600, 350, 'life'))
 
-    def _add_enemies(self):
-        if self.level_number in range(1, 5):
-            print(f"Level {self.level_number}: Goblin Archer & Goblin Knight")
-        elif self.level_number == 5:
-            print("Level 5: Boss - Saman (Fireball, summon goblins)")
-        elif self.level_number in range(6, 10):
-            print(f"Level {self.level_number}: Troll, Griffin, Ular")
-        elif self.level_number == 10:
-            print("Level 10: Boss - Medusa (Freeze player)")
-        elif self.level_number in range(11, 15):
-            print(f"Level {self.level_number}: Knight, Archer Knight, Magician, Lich")
-        elif self.level_number == 15:
-            print("Level 15: Boss - Demon King")
-
 class LevelManager:
-    def __init__(self):
+    def __init__(self, player):  # Terima player sebagai parameter
         self.current_level = 1
-        self.level = Level(self.current_level)
+        self.level = Level(self.current_level, player)  # Pass player ke Level
 
     def go_to_next_level(self):
         if self.current_level < 15:
             self.current_level += 1
-            self.level = Level(self.current_level)
+            self.level = Level(self.current_level, self.level.player)  # Pass player ke Level
 
-    def go_to_previous_level(self):
-        if self.current_level > 1:
-            self.current_level -= 1
-            self.level = Level(self.current_level)
+    def go_to_specific_level(self, level_number):
+        self.current_level = level_number
+        self.level = Level(level_number, self.level.player)
 
 # === Modular Block Definitions ===
 
