@@ -1,7 +1,7 @@
 import pygame
 
 class Platform(pygame.sprite.Sprite):
-    def __init__(self, x, y, width, height):
+    def __init__(self, x, y, width, height, spawnable=True):
         super().__init__()
         self.image = pygame.Surface((width, height))
         self.image.fill((169, 169, 169))  # Warna abu-abu
@@ -9,10 +9,8 @@ class Platform(pygame.sprite.Sprite):
         self.rect.x = x
         self.rect.y = y
 
-    def update(self):
-        # Perhatikan jika perlu mengatur pergerakan platform atau logika interaksi player
-        pass
-
+        self.spawnable = spawnable  # apakah boleh digunakan untuk spawn musuh
+        
 class Item(pygame.sprite.Sprite):
     def __init__(self, x, y, item_type):
         super().__init__()
