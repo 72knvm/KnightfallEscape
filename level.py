@@ -1,7 +1,9 @@
 import pygame
-from platform import Platform, Item
+from platform import Platform
 import random
 from goblin import Goblin
+from player import find_spawn_y
+from platform import AnimatedPortal
 
 class SimplePlatform(pygame.sprite.Sprite):
     def __init__(self, x, y, width, height):
@@ -13,13 +15,14 @@ class SimplePlatform(pygame.sprite.Sprite):
 MAX_LEVEL_WIDTH = 20000  # pastikan ini nilai level kamu sesuai
 
 class Level:
-    def __init__(self, level_number, player):
+    def __init__(self, level_number, player, assets):
         self.level_number = level_number
         self.player = player  # Simpan objek player yang diterima
+        self.assets = assets
         self.platforms = pygame.sprite.Group()
-        self.items = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
         self.boss = None
+        self.portal = None  # untuk menyimpan item portal
 
         self.state = self._get_state_from_level()
         self.build_level()
@@ -115,8 +118,8 @@ class Level:
 
     def build_level_1(self):
         self.platforms.empty()
-        self.items.empty()
-        self.enemies.empty()  # Bersihkan grup musuh dulu
+        self.enemies.empty()
+        self.portal = None  # untuk menyimpan portal animasi
 
         weighted_blocks = [
             (block_flat_corridor, 1),
@@ -132,52 +135,41 @@ class Level:
             return random.choices(blocks, weights=weights, k=k)
 
         def short_flat(x):
-            return [Platform(x, 550, 500, 50, spawnable=False)], [], 500
+            platforms = [Platform(x, 550, 500, 50, spawnable=False, image=self.assets["platform"])]
+            return platforms, 500
 
         core_blocks = weighted_choice(weighted_blocks, k=5)
         x_offset = 0
 
-        intro_platforms, intro_items, intro_width = short_flat(x_offset)
+        # Platform awal
+        intro_platforms, intro_width = short_flat(x_offset)
         self.platforms.add(*intro_platforms)
-        self.items.add(*intro_items)
         x_offset += intro_width
 
+        # Tambahkan blok random utama
         for block_fn in core_blocks:
-            platforms, items, width = block_fn(x_offset)
+            platforms, width = block_fn(x_offset)
             self.platforms.add(*platforms)
-            self.items.add(*items)
             x_offset += width
 
-        outro_platforms, outro_items, outro_width = short_flat(x_offset)
+        # Platform akhir sebelum portal
+        outro_platforms, outro_width = short_flat(x_offset)
         self.platforms.add(*outro_platforms)
-        self.items.add(*outro_items)
         x_offset += outro_width
 
-        portal_platforms, portal_items, portal_width = portal_block(x_offset)
+        # Tambahkan portal
+        portal_platforms, portal_items, portal_width = portal_block(x_offset, self.assets)
         self.platforms.add(*portal_platforms)
-        self.items.add(*portal_items)
+        self.portal = portal_items[0]  # simpan objek portal
         x_offset += portal_width
 
-        self.platforms.add(*outro_platforms)
-        self.items.add(*outro_items)
-        x_offset += outro_width
-
-        # --- Spawn musuh Goblin di posisi platform yang sesuai ---
-
-        # Fungsi bantu cari platform berdasarkan x Goblin
-        def find_platform_y(x_pos):
-            for platform in self.platforms:
-                if platform.rect.left <= x_pos <= platform.rect.right:
-                    return platform.rect.top
-            return 550  # fallback ke tanah jika tidak ketemu
-
         self._add_enemies()
-
         print("Level 1 dengan musuh Goblin sudah dibuat")
 
     def build_level_2(self):
         self.platforms.empty()
-        self.items.empty()
+        self.enemies.empty()
+        self.portal = None  # untuk menyimpan portal animasi
 
         weighted_blocks = [
             (block_flat_corridor, 0.5),
@@ -193,45 +185,41 @@ class Level:
             return random.choices(blocks, weights=weights, k=k)
 
         def short_flat(x):
-            return [Platform(x, 550, 500, 50, spawnable=False)], [], 500
+            platforms = [Platform(x, 550, 500, 50, spawnable=False, image=self.assets["platform"])]
+            return platforms, 500
 
         core_blocks = weighted_choice(weighted_blocks, k=6)
         x_offset = 0
 
-        intro_platforms, intro_items, intro_width = short_flat(x_offset)
+        # Platform awal
+        intro_platforms, intro_width = short_flat(x_offset)
         self.platforms.add(*intro_platforms)
-        self.items.add(*intro_items)
         x_offset += intro_width
 
+        # Tambahkan blok utama random
         for block_fn in core_blocks:
-            platforms, items, width = block_fn(x_offset)
+            platforms, width = block_fn(x_offset)
             self.platforms.add(*platforms)
-            self.items.add(*items)
             x_offset += width
 
-        outro_platforms, outro_items, outro_width = short_flat(x_offset)
+        # Platform penutup sebelum portal
+        outro_platforms, outro_width = short_flat(x_offset)
         self.platforms.add(*outro_platforms)
-        self.items.add(*outro_items)
         x_offset += outro_width
 
-        portal_platforms, portal_items, portal_width = portal_block(x_offset)
+        # Tambahkan portal (dengan posisi visual sesuai)
+        portal_platforms, portal_items, portal_width = portal_block(x_offset, self.assets)
         self.platforms.add(*portal_platforms)
-        self.items.add(*portal_items)
+        self.portal = portal_items[0]
         x_offset += portal_width
 
-        def find_platform_y(x_pos):
-            for platform in self.platforms:
-                if platform.rect.left <= x_pos <= platform.rect.right:
-                    return platform.rect.top
-            return 550  # fallback ke tanah jika tidak ketemu
-
         self._add_enemies()
-
-        print("Level 2")
+        print("Level 2 dengan portal sudah dibuat")
 
     def build_level_3(self):
         self.platforms.empty()
-        self.items.empty()
+        self.enemies.empty()
+        self.portal = None  # untuk menyimpan portal animasi
 
         weighted_blocks = [
             (block_flat_corridor, 0.2),
@@ -247,45 +235,41 @@ class Level:
             return random.choices(blocks, weights=weights, k=k)
 
         def short_flat(x):
-            return [Platform(x, 550, 500, 50, spawnable=False)], [], 500
+            platforms = [Platform(x, 550, 500, 50, spawnable=False, image=self.assets["platform"])]
+            return platforms, 500
 
         core_blocks = weighted_choice(weighted_blocks, k=8)
         x_offset = 0
 
-        intro_platforms, intro_items, intro_width = short_flat(x_offset)
+        # Platform awal
+        intro_platforms, intro_width = short_flat(x_offset)
         self.platforms.add(*intro_platforms)
-        self.items.add(*intro_items)
         x_offset += intro_width
 
+        # Tambahkan blok utama random
         for block_fn in core_blocks:
-            platforms, items, width = block_fn(x_offset)
+            platforms, width = block_fn(x_offset)
             self.platforms.add(*platforms)
-            self.items.add(*items)
             x_offset += width
 
-        outro_platforms, outro_items, outro_width = short_flat(x_offset)
+        # Platform penutup sebelum portal
+        outro_platforms, outro_width = short_flat(x_offset)
         self.platforms.add(*outro_platforms)
-        self.items.add(*outro_items)
         x_offset += outro_width
 
-        portal_platforms, portal_items, portal_width = portal_block(x_offset)
+        # Tambahkan portal
+        portal_platforms, portal_items, portal_width = portal_block(x_offset, self.assets)
         self.platforms.add(*portal_platforms)
-        self.items.add(*portal_items)
+        self.portal = portal_items[0]
         x_offset += portal_width
 
-        def find_platform_y(x_pos):
-            for platform in self.platforms:
-                if platform.rect.left <= x_pos <= platform.rect.right:
-                    return platform.rect.top
-            return 550  # fallback ke tanah jika tidak ketemu
-
         self._add_enemies()
-
-        print("Level 3")
+        print("Level 3 dengan portal sudah dibuat")
 
     def build_level_4(self):
         self.platforms.empty()
-        self.items.empty()
+        self.enemies.empty()
+        self.portal = None  # menyimpan portal animasi
 
         weighted_blocks = [
             (block_flat_corridor, 0.05),
@@ -301,46 +285,42 @@ class Level:
             return random.choices(blocks, weights=weights, k=k)
 
         def short_flat(x):
-            return [Platform(x, 550, 500, 50, spawnable=False)], [], 500
+            platforms = [Platform(x, 550, 500, 50, spawnable=False, image=self.assets["platform"])]
+            return platforms, 500
 
         core_blocks = weighted_choice(weighted_blocks, k=10)
         x_offset = 0
 
-        intro_platforms, intro_items, intro_width = short_flat(x_offset)
+        # Platform awal
+        intro_platforms, intro_width = short_flat(x_offset)
         self.platforms.add(*intro_platforms)
-        self.items.add(*intro_items)
         x_offset += intro_width
 
+        # Blok utama
         for block_fn in core_blocks:
-            platforms, items, width = block_fn(x_offset)
+            platforms, width = block_fn(x_offset)
             self.platforms.add(*platforms)
-            self.items.add(*items)
             x_offset += width
 
-        outro_platforms, outro_items, outro_width = short_flat(x_offset)
+        # Outro platform sebelum portal
+        outro_platforms, outro_width = short_flat(x_offset)
         self.platforms.add(*outro_platforms)
-        self.items.add(*outro_items)
         x_offset += outro_width
 
-        portal_platforms, portal_items, portal_width = portal_block(x_offset)
+        # Tambahkan portal
+        portal_platforms, portal_items, portal_width = portal_block(x_offset, self.assets)
         self.platforms.add(*portal_platforms)
-        self.items.add(*portal_items)
+        self.portal = portal_items[0]
         x_offset += portal_width
 
-        def find_platform_y(x_pos):
-            for platform in self.platforms:
-                if platform.rect.left <= x_pos <= platform.rect.right:
-                    return platform.rect.top
-            return 550  # fallback ke tanah jika tidak ketemu
-
         self._add_enemies()
-
-        print("Level 4")
+        print("Level 4 dengan portal sudah dibuat")
 
     def build_level_5(self):
         self.platforms.empty()
-        self.items.empty()
+        self.enemies.empty()
         self.lava = pygame.sprite.Group()
+        self.portal = None  # simpan portal animasi
 
         weighted_blocks = [
             (block_flat_corridor, 0.1),
@@ -356,54 +336,47 @@ class Level:
             return random.choices(blocks, weights=weights, k=k)
 
         def short_flat(x):
-            return [Platform(x, 550, 500, 50, spawnable=False)], [], 500
+            platforms = [Platform(x, 550, 500, 50, spawnable=False, image=self.assets["platform"])]
+            return platforms, 500
 
         core_blocks = weighted_choice(weighted_blocks, k=12)
         x_offset = 0
 
-        # Intro
-        intro_platforms, intro_items, intro_width = short_flat(x_offset)
+        # Platform awal
+        intro_platforms, intro_width = short_flat(x_offset)
         self.platforms.add(*intro_platforms)
-        self.items.add(*intro_items)
         x_offset += intro_width
 
         # Blok rintangan
         for block_fn in core_blocks:
             result = block_fn(x_offset)
-            if len(result) == 3:
-                platforms, items, width = result
+            if len(result) == 2:
+                platforms, width = result
+            elif len(result) == 3:
+                platforms, width, lava = result
+                self.lava.add(*lava)
             else:
-                platforms, items, lava, width = result
+                platforms, _, lava, width = result
                 self.lava.add(*lava)
             self.platforms.add(*platforms)
-            self.items.add(*items)
             x_offset += width
 
         # Outro platform
-        outro_platforms, outro_items, outro_width = short_flat(x_offset)
+        outro_platforms, outro_width = short_flat(x_offset)
         self.platforms.add(*outro_platforms)
-        self.items.add(*outro_items)
         x_offset += outro_width
 
-        # Portal ke Level 6 (boss room)
-        portal_platforms, portal_items, portal_width = portal_block(x_offset)
+        # Portal menuju Level 6
+        portal_platforms, portal_items, portal_width = portal_block(x_offset, self.assets)
         self.platforms.add(*portal_platforms)
-        self.items.add(*portal_items)
+        self.portal = portal_items[0]
         x_offset += portal_width
 
-        def find_platform_y(x_pos):
-            for platform in self.platforms:
-                if platform.rect.left <= x_pos <= platform.rect.right:
-                    return platform.rect.top
-            return 550  # fallback ke tanah jika tidak ketemu
-
         self._add_enemies()
-
-        print("Level 5")
+        print("Level 5 dengan portal sudah dibuat")
 
     def build_level_shaman(self):
         self.platforms.empty()
-        self.items.empty()
 
         # === Desain Lorong Panjang (blok modular) ===
         corridor_width = 100
@@ -448,36 +421,41 @@ class Level:
 
         print("Shaman Boss Room")
         
-    def _add_items(self):
-        if self.level_number == 4:
-            self.items.add(Item(250, 420, 'life'))
-        elif self.level_number == 5:
-            self.items.add(Item(700, 500, 'fireball'))
-        elif self.level_number == 9:
-            self.items.add(Item(600, 350, 'shield'))
-        elif self.level_number == 14:
-            self.items.add(Item(600, 350, 'life'))
-
 class LevelManager:
-    def __init__(self, player):  # Terima player sebagai parameter
+    def __init__(self, player, assets):
         self.current_level = 1
-        self.level = Level(self.current_level, player)  # Pass player ke Level
+        self.level = Level(self.current_level, player, assets)
+        self.assets = assets
 
     def go_to_next_level(self):
-        if self.current_level < 15:
-            self.current_level += 1
-            self.level = Level(self.current_level, self.level.player)  # Pass player ke Level
+        self.current_level += 1
+        # Buat level baru dengan player yang sama
+        self.level = Level(self.current_level, self.level.player, self.assets)
+
+        # Tentukan spawn_x sesuai level, bisa juga disimpan per level
+        spawn_x = 100
+        player_height = self.level.player.rect.height
+        spawn_y = find_spawn_y(self.level.platforms, spawn_x, player_height)
+
+        # Reset posisi player di level baru
+        self.level.player.reset(x=spawn_x, y=spawn_y, platforms=self.level.platforms)
 
     def go_to_specific_level(self, level_number):
         self.current_level = level_number
-        self.level = Level(level_number, self.level.player)
+        self.level = Level(level_number, self.level.player, self.assets)
+
+        # Sama seperti go_to_next_level, reset posisi player di level spesifik
+        spawn_x = 100
+        player_height = self.level.player.rect.height
+        spawn_y = find_spawn_y(self.level.platforms, spawn_x, player_height)
+        self.level.player.reset(x=spawn_x, y=spawn_y, platforms=self.level.platforms)
 
 # === Modular Block Definitions ===
 
 def block_flat_corridor(x):
     width = 700
     platforms = [Platform(x, 550, width, 50)]
-    return platforms, [], width
+    return platforms, width
 
 def block_platform_high(x):
     width = 700
@@ -486,8 +464,7 @@ def block_platform_high(x):
         Platform(x + 250, 400, 200, 30),
         Platform(x + 500, 300, 200, 30)
     ]
-    items = [Item(x + 520, 270, 'life')]
-    return platforms, items, width
+    return platforms, width
 
 def block_gap_bridge(x):
     left = 400
@@ -498,35 +475,44 @@ def block_gap_bridge(x):
         Platform(x, 550, left, 50),
         Platform(x + left + gap, 550, right, 50)
     ]
-    items = [Item(x + left + gap + 20, 500, 'shield')]
-    return platforms, items, width
+    return platforms, width
 
 def block_step_up(x):
     width = 700
+    gap = 50
     platforms = [
         Platform(x, 550, 200, 50),
-        Platform(x + 220, 500, 200, 50),
-        Platform(x + 440, 450, 200, 50)
+        Platform(x + 220 + gap, 500, 200, 100),     # tambah gap di sini
+        Platform(x + 440 + 2 * gap, 450, 200, 150)  # tambah gap di sini
     ]
-    return platforms, [], width
+    return platforms, width
 
 def block_multi_path(x):
     width = 700
     platforms = [
         Platform(x, 550, 300, 50),
         Platform(x + 350, 550, 300, 50),
-        Platform(x + 150, 400, 150, 30),
-        Platform(x + 400, 350, 150, 30)
+        Platform(x + 150, 450, 150, 30),
+        Platform(x + 400, 400, 150, 30)
     ]
-    items = [Item(x + 420, 320, 'life')]
-    return platforms, items, width
+    return platforms, width
 
-def portal_block(x):
-    print(f"[DEBUG] Portal created at x={x+125}, y=500")
-    platforms = [Platform(x, 550, 300, 50)]
-    items = [Item(x + 125, 500, 'portal')]
-    return platforms, items, 300
+def portal_block(x, assets):
+    platform_y = 550
+    platform_height = 50
+    portal_height = assets["portal"][0].get_height()
 
+    # Posisi visual sprite (tapi rect tetap di logika yang akurat)
+    portal_y = platform_y - portal_height  # logika dasar untuk rect
+    render_offset_y = 25  # sesuaikan agar sprite sejajar atas platform
+    render_offset_x = 120  # geser horizontal agar sprite pas di tengah
+
+    platforms = [Platform(x, platform_y, 300, platform_height)]
+    portal = AnimatedPortal(x + 86, portal_y, assets["portal"],
+                            render_offset_x=render_offset_x,
+                            render_offset_y=render_offset_y)
+    
+    return platforms, [portal], 300
 # Blok Lorong
 def block_corridor(x, y, length):
     corridor_width = 100
