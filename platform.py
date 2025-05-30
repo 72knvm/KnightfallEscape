@@ -18,22 +18,21 @@ class Platform(pygame.sprite.Sprite):
         self.spawnable = spawnable
 
 class Item(pygame.sprite.Sprite):
-    def __init__(self, x, y, item_type):
+    def __init__(self, x, y, item_type, image_dict=None):
         super().__init__()
         self.type = item_type
-        self.image = pygame.Surface((30, 30))
+        self.collected = False
+
+        # Gambar item
+        if image_dict and item_type in image_dict:
+            self.image = image_dict[item_type]
+        else:
+            self.image = pygame.Surface((30, 30))
+            self.image.fill((255, 0, 0) if item_type == 'health' else (0, 0, 255))
+
+        # Posisi berdasarkan gambar
         self.rect = self.image.get_rect(topleft=(x, y))
 
-        if item_type == 'life':
-            self.image.fill((0, 255, 0))
-        elif item_type == 'shield':
-            self.image.fill((0, 0, 255))
-        elif item_type == 'fireball':
-            self.image.fill((255, 0, 0))
-        elif item_type == 'portal':
-            self.image.fill((255, 255, 0))
-        else:
-            self.image.fill((150, 150, 150))
 class AnimatedPortal(pygame.sprite.Sprite):
     def __init__(self, x, y, frames, frame_duration=100, render_offset_x=0, render_offset_y=0):
         super().__init__()
