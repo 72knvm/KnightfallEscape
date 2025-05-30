@@ -20,7 +20,7 @@ class Player(pygame.sprite.Sprite):
         self.frame_index = 0
         self.current_frames = self.idle_frames
         self.image = self.current_frames[self.frame_index]
-        self.rect = self.image.get_rect()
+        self.rect = self.image.get_rect(topleft=(x, y))
 
         self.animation_speed = 0.1
         self.frame_timer = 0
@@ -31,10 +31,14 @@ class Player(pygame.sprite.Sprite):
         self.gravity = 1
         self.on_ground = False
 
-        self.lives = 3
+        self.lives = 5
+        self.lives = min(self.lives, 5)
         self.damage_cooldown = 1000
         self.last_damage_time = 0
         self.is_invulnerable = False
+
+        self.shield_hits = 0  # untuk menyimpan jumlah hit yang bisa ditahan shield
+        self.items = pygame.sprite.Group()
 
         self.attacking = False
         self.attack_frame_index = 0
@@ -80,6 +84,7 @@ class Player(pygame.sprite.Sprite):
         if self.debug_hitbox and self.attacking:
             adjusted_hitbox = self.attack_hitbox.move(-camera_x, -camera_y)
             pygame.draw.rect(surface, (255, 0, 0), adjusted_hitbox, 2)
+            pygame.draw.rect(surface, (0, 255, 0), self.collision_rect.move(-camera_x, -camera_y), 2)
 
     def deal_damage(self):
         hitbox_width = 50
@@ -176,6 +181,8 @@ class Player(pygame.sprite.Sprite):
         if self.is_game_over:
             return
 
+        self.check_item_collision()
+
         if self.attacking:
             self.update_attack_animation(dt)
             return
@@ -220,7 +227,7 @@ class Player(pygame.sprite.Sprite):
 
         self.vel_y += self.gravity
         self.collision_rect.y += self.vel_y
-        self.handle_vertical_collision(platforms)
+        self.handle_vertical_collision(platforms, force_attach=True)
         self.rect.midbottom = self.collision_rect.midbottom
         self.rect.y += 45
 
@@ -234,12 +241,32 @@ class Player(pygame.sprite.Sprite):
                 self.last_attack_time = current_time
                 self.has_dealt_damage = False
 
+    def check_item_collision(self):
+        for item in list(self.items):
+            if self.collision_rect.colliderect(item.rect):
+                print(f"[INFO] Player mengambil {item.type}")
+                self.apply_item_effect(item)
+                item.kill()
+
+    def apply_item_effect(self, item):
+        if item.type == 'health':
+            self.lives = min(self.lives + 1, 5)  # Hindari lebih dari 5
+            print("❤️ Nyawa bertambah!")
+        elif item.type == 'shield':
+            self.shield_hits = 3
+            print("🛡️ Shield aktif!")
+
     def take_damage(self, damage=1):
         current_time = pygame.time.get_ticks()
 
         if self.is_invulnerable:
             print("⚠️ Player sedang invulnerable. Damage diabaikan.")
             return
+
+        if self.shield_hits > 0:
+            self.shield_hits -= 1
+            print(f"🛡️ Shield melindungi! Tersisa: {self.shield_hits} hit")
+            return  # Tidak mengurangi nyawa
 
         if current_time - self.last_damage_time >= self.damage_cooldown:
             self.lives -= damage
@@ -275,7 +302,8 @@ class Player(pygame.sprite.Sprite):
         collision_y = y + self.rect.height - collision_height
         self.collision_rect = pygame.Rect(collision_x, collision_y, collision_width, collision_height)
 
-        self.lives = 3
+        self.lives = 5
+        self.lives = min(self.lives, 5)
         self.is_game_over = False
         self.is_invulnerable = False
         self.last_damage_time = 0
@@ -293,7 +321,9 @@ class Player(pygame.sprite.Sprite):
 
         # ✅ Deteksi apakah langsung di atas platform
         if platforms is not None:
-            self.handle_vertical_collision(platforms)
+            self.handle_vertical_collision(platforms, force_attach=True)
+            self.rect.midbottom = self.collision_rect.midbottom
+            self.rect.y += 45
 
     def handle_horizontal_collision(self, platforms):
         for platform in platforms:
@@ -303,14 +333,15 @@ class Player(pygame.sprite.Sprite):
                 else:
                     self.collision_rect.left = platform.rect.right
 
-    def handle_vertical_collision(self, platforms):
+    def handle_vertical_collision(self, platforms, force_attach=False):
         self.on_ground = False
         for platform in platforms:
             if self.collision_rect.colliderect(platform.rect):
-                if self.vel_y > 0:
+                if force_attach or self.vel_y > 0:
                     self.collision_rect.bottom = platform.rect.top
                     self.vel_y = 0
                     self.on_ground = True
                 elif self.vel_y < 0:
                     self.collision_rect.top = platform.rect.bottom
                     self.vel_y = 0
+
