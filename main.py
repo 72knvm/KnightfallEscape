@@ -23,7 +23,6 @@ cinzel_font_large = pygame.font.Font(FONT_PATH, 60)
 cinzel_font_medium = pygame.font.Font(FONT_PATH, 36)
 cinzel_font_small = pygame.font.Font(FONT_PATH, 24)
 
-heart_image = assets["heart"]
 bg_image = assets["main_menu_bg"]
 level_bg = pygame.transform.scale(assets["level_bg"], (WIDTH, HEIGHT))
 idle_frames = assets['idle']
@@ -123,8 +122,7 @@ def show_main_menu():
     cinzel_font = cinzel_font_large
     button_font = cinzel_font_medium
     credit_font = pygame.font.SysFont(None, 24)
-    play_music("Knightfall\\Backsound\\Main Song.mp3")
-
+    play_music("Backsound/Main Song.mp3")
     bg_image = assets["main_menu_bg"]
 
     while True:
@@ -456,12 +454,20 @@ def toggle_fullscreen():
 
 import pygame
 
-def play_music(path, loop=True):
+def play_music(relative_path, loop=True):
     try:
-        pygame.mixer.music.load(path)
+        base_path = os.path.dirname(__file__)
+        music_path = os.path.join(base_path, relative_path)
+
+        if not os.path.exists(music_path):
+            print(f"⚠️ Musik tidak ditemukan: {music_path}")
+            return
+
+        pygame.mixer.music.load(music_path)
         pygame.mixer.music.play(-1 if loop else 0)
+        print(f"🎵 Memutar musik: {relative_path}")
     except pygame.error as e:
-        print(f"Error loading music file '{path}': {e}")
+        print(f"❌ Error memuat musik '{relative_path}': {e}")
 
 def stop_music():
     pygame.mixer.music.stop()
@@ -511,7 +517,7 @@ level = Level(selected_level, None, assets)
 
 # Tentukan posisi spawn horizontal dan tinggi player
 spawn_x = 100
-player_height = 70  # sesuaikan dengan sprite player
+player_height = 70  # sesuaikan dengan sprite playerd
 
 # Hitung posisi spawn Y dari platform level
 spawn_y = find_spawn_y(level.platforms, spawn_x, player_height)
@@ -533,12 +539,13 @@ player.parry_frames = assets['parry']
 player.death_frames = assets["death"]
 
 level.player = player
+player.items = level.items
 
 level_manager = LevelManager(player, assets)
 level_manager.current_level = selected_level
 level_manager.level = level
 
-play_music("Knightfall/Backsound/Level Song.mp3")  # mainkan musik level setelah siap
+play_music("Backsound/Level Song.mp3")
 
 camera_x = 0
 MAX_LEVEL_WIDTH = 20000
@@ -609,6 +616,11 @@ while running:
         # Render platform ke viewport surface
         for platform in level.platforms:
             viewport_surface.blit(platform.image, (platform.rect.x - camera_x, platform.rect.y - camera_y))
+                
+        for item in level.items:
+            screen_x = item.rect.x - camera_x
+            screen_y = item.rect.y - camera_y
+            viewport_surface.blit(item.image, (screen_x, screen_y))
 
         if level.portal:
             level.portal.update()
@@ -622,6 +634,7 @@ while running:
         # Render musuh dan projectile ke viewport surface
         for enemy in level.enemies:
             viewport_surface.blit(enemy.image, (enemy.rect.x - camera_x, enemy.rect.y - camera_y))
+            pygame.draw.rect(viewport_surface, (255, 0, 0), enemy.rect.move(-camera_x, -camera_y), 2)
             for proj in enemy.projectiles:
                 viewport_surface.blit(proj.image, (proj.rect.x - camera_x, proj.rect.y - camera_y))
                 if proj.rect.colliderect(player.rect):
@@ -649,10 +662,9 @@ while running:
 
         # Render UI biasa (langsung di screen, tanpa scaling)
         draw_text(f"Level: {level.level_number}", 10, 10)
-        for i in range(player.lives):
-            x = 10 + i * (24 + 5)
-            y = 50
-            screen.blit(heart_image, (x, y))
+
+        health_bar_frame = assets["health_bar"][5 - max(0, min(player.lives, 5))]
+        screen.blit(health_bar_frame, (10, 10))  # atau posisikan sesuai keinginan
 
         if level_manager.current_level != level.level_number:
             level = level_manager.level
@@ -689,16 +701,18 @@ while running:
                 assets['attack'],
                 assets['hurt'],
                 platforms=level.platforms
+
             )
             player.parry_frames = assets['parry']
             player.death_frames = assets["death"]
 
             level.player = player
+            player.items = level.items
             level_manager = LevelManager(player, assets)
             level_manager.current_level = selected_level
             level_manager.level = level
             update_max_width()
-            play_music("Knightfall/Backsound/Level Song.mp3")
+            play_music("Backsound/Level Song.mp3")
             paused = False
 
     elif game_over:
@@ -718,6 +732,7 @@ while running:
             player.death_frames = assets["death"]
 
             level.player = player
+            player.items = level.items
             level_manager.level = level
             update_max_width()
             game_over = False
@@ -738,6 +753,7 @@ while running:
             player.death_frames = assets["death"]
 
             level.player = player
+            player.items = level.items
             level_manager.current_level = selected_level
             level_manager.level = level
             update_max_width()
