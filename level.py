@@ -1,9 +1,9 @@
 import pygame
-from platform import Platform
+from game_platform import Platform, Item
 import random
 from goblin import Goblin
 from player import find_spawn_y
-from platform import AnimatedPortal
+from game_platform import AnimatedPortal
 
 class SimplePlatform(pygame.sprite.Sprite):
     def __init__(self, x, y, width, height):
@@ -57,7 +57,6 @@ class Level:
 
     def spawn_random_goblins(self, count=5):
         self.enemies.empty()
-
         platform_list = [p for p in self.platforms if getattr(p, "spawnable", True)]
 
         if not platform_list:
@@ -67,21 +66,56 @@ class Level:
         knight_count = count // 2
         archer_count = count - knight_count
         variants = ["knight"] * knight_count + ["archer"] * archer_count
-        random.shuffle(variants)  # biar urutan spawn acak
+        random.shuffle(variants)
 
         for variant in variants:
             platform = random.choice(platform_list)
             x_pos = random.randint(platform.rect.left, platform.rect.right)
             y_pos = platform.rect.top - 60
 
-            goblin = Goblin(x_pos, y_pos, pygame.Surface((40, 60)), variant=variant)
-
-            if variant == "knight":
-                goblin.image.fill((255, 165, 0))  # oranye
-            else:
-                goblin.image.fill((0, 255, 255))  # cyan
+            # ✅ Kirim semua assets, Goblin akan memilih sesuai variant
+            goblin = Goblin(x_pos, y_pos, image=None, variant=variant, assets=self.assets)
 
             self.enemies.add(goblin)
+
+    def spawn_random_potions(self, count=3):
+        self.items = pygame.sprite.Group()
+        image_dict = {
+            "health": self.assets.get("health_potion"),
+            "shield": self.assets.get("shield_potion")
+        }
+
+        spawnable_platforms = [p for p in self.platforms if getattr(p, "spawnable", True)]
+
+        if not spawnable_platforms:
+            print("[WARNING] Tidak ada platform valid untuk spawn potion.")
+            return
+
+        from random import choice, randint
+
+        for _ in range(count):
+            platform = choice(spawnable_platforms)
+            item_type = choice(["health", "shield"])
+            item_img = image_dict[item_type]
+            item_height = item_img.get_height() if item_img else 30
+
+            x_pos = randint(platform.rect.left, platform.rect.right - 30)
+            y_pos = platform.rect.top - item_height
+
+            item = Item(x_pos, y_pos, item_type, image_dict)
+            self.items.add(item)
+
+    def _add_items(self):
+        self.items = pygame.sprite.Group()
+        image_dict = {
+            "health": self.assets.get("health_potion"),
+            "shield": self.assets.get("shield_potion")
+        }
+        item_height = image_dict["health"].get_height()
+        y = 550 - item_height
+
+        self.items.add(Item(300, y, "health", image_dict))
+        self.items.add(Item(600, y, "shield", image_dict))
 
     def _add_enemies(self):
         if self.level_number == 1:
@@ -163,6 +197,9 @@ class Level:
         self.portal = portal_items[0]  # simpan objek portal
         x_offset += portal_width
 
+        # Tambahkan item (potion)
+        self.spawn_random_potions(count=3)
+
         self._add_enemies()
         print("Level 1 dengan musuh Goblin sudah dibuat")
 
@@ -207,14 +244,17 @@ class Level:
         self.platforms.add(*outro_platforms)
         x_offset += outro_width
 
-        # Tambahkan portal (dengan posisi visual sesuai)
+        # Tambahkan portal
         portal_platforms, portal_items, portal_width = portal_block(x_offset, self.assets)
         self.platforms.add(*portal_platforms)
         self.portal = portal_items[0]
         x_offset += portal_width
 
+        # ✅ Urutan yang tepat: Tambahkan potion dulu, lalu musuh
+        self.spawn_random_potions(count=4)
         self._add_enemies()
-        print("Level 2 dengan portal sudah dibuat")
+
+        print("Level 2 dengan portal dan potion sudah dibuat")
 
     def build_level_3(self):
         self.platforms.empty()
@@ -263,8 +303,13 @@ class Level:
         self.portal = portal_items[0]
         x_offset += portal_width
 
+        # ✅ Tambahkan potion terlebih dahulu
+        self.spawn_random_potions(count=5)
+
+        # ✅ Lalu musuh
         self._add_enemies()
-        print("Level 3 dengan portal sudah dibuat")
+
+        print("Level 3 dengan portal dan potion sudah dibuat")
 
     def build_level_4(self):
         self.platforms.empty()
@@ -313,8 +358,13 @@ class Level:
         self.portal = portal_items[0]
         x_offset += portal_width
 
+        # ✅ Potion dulu
+        self.spawn_random_potions(count=6)
+
+        # ✅ Baru musuh
         self._add_enemies()
-        print("Level 4 dengan portal sudah dibuat")
+
+        print("Level 4 dengan portal dan potion sudah dibuat")
 
     def build_level_5(self):
         self.platforms.empty()
@@ -372,8 +422,13 @@ class Level:
         self.portal = portal_items[0]
         x_offset += portal_width
 
+        # ✅ Potion dulu agar player bisa interaksi
+        self.spawn_random_potions(count=7)
+
+        # ✅ Lalu musuh
         self._add_enemies()
-        print("Level 5 dengan portal sudah dibuat")
+
+        print("Level 5 dengan portal dan potion sudah dibuat")
 
     def build_level_shaman(self):
         self.platforms.empty()
@@ -439,6 +494,8 @@ class LevelManager:
 
         # Reset posisi player di level baru
         self.level.player.reset(x=spawn_x, y=spawn_y, platforms=self.level.platforms)
+
+        self.level.player.items = self.level.items 
 
     def go_to_specific_level(self, level_number):
         self.current_level = level_number
