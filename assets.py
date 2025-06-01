@@ -112,14 +112,22 @@ def load_portal_frames(sprite_sheet, num_frames=7, scale_factor=2):
         frames.append(frame)
     return frames
 
-def load_health_bar_frames(sprite_sheet, num_frames=6):
+def load_health_bar_frames(sheet, num_frames=6):
     frames = []
-    sheet_width, sheet_height = sprite_sheet.get_size()
+    sheet_width, sheet_height = sheet.get_size()
     frame_width = sheet_width // num_frames
+    frame_height = sheet_height // 2  # karena 2 baris
+
+    # Baris 0: health biasa
     for i in range(num_frames):
-        frame = pygame.Surface((frame_width, sheet_height), pygame.SRCALPHA)
-        frame.blit(sprite_sheet, (0, 0), (i * frame_width, 0, frame_width, sheet_height))
+        frame = pygame.Surface((frame_width, frame_height), pygame.SRCALPHA)
+        frame.blit(sheet, (0, 0), (i * frame_width, 0, frame_width, frame_height))
         frames.append(frame)
+
+    # Baris 1: shield
+    shield_frame = pygame.Surface((frame_width, frame_height), pygame.SRCALPHA)
+    shield_frame.blit(sheet, (0, 0), (0, frame_height, frame_width, frame_height))
+    frames.append(shield_frame)  # indeks ke-6
     return frames
 
 def load_archer_frames(sheet, frame_width, frame_height, scale=2):
@@ -130,6 +138,13 @@ def load_archer_frames(sheet, frame_width, frame_height, scale=2):
     animations["hurt"] = load_animation_frames(sheet, row=3, num_frames=5, frame_width=frame_width, frame_height=frame_height, scale=scale)
     animations["dead"] = load_animation_frames(sheet, row=4, num_frames=6, frame_width=frame_width, frame_height=frame_height, scale=scale)
     return animations
+
+def load_sheet_shaman(base_path, name, frame_count):
+    path = os.path.join(base_path, "asset", name + ".png")
+    sheet = pygame.image.load(path).convert_alpha()
+    fw = sheet.get_width() // frame_count
+    fh = sheet.get_height()
+    return load_animation_frames(sheet, row=0, num_frames=frame_count, frame_width=fw, frame_height=fh, scale=2)
 
 def load_assets():
     base_path = os.path.dirname(os.path.abspath(__file__))
@@ -144,11 +159,17 @@ def load_assets():
     main_menu_path = os.path.join(base_path, "asset", "main_menu.jpg")
     main_menu_image = pygame.image.load(main_menu_path).convert()
 
+    boss_room_path = os.path.join(base_path, "asset", "boss_room.png")
+    boss_room_image = pygame.image.load(boss_room_path).convert_alpha()
+
     level_bg_path = os.path.join(base_path, "asset", "Castle_Background.jpg")
     level_bg_image = pygame.image.load(level_bg_path).convert()
 
-    platform_path = os.path.join(base_path, "asset", "platform.png")
+    platform_path = os.path.join(base_path, "asset", "plat_bg.jpg")
     platform_image = pygame.image.load(platform_path).convert_alpha()
+
+    victory_bg_path = os.path.join(base_path, "asset", "victory.png")
+    victory_bg = pygame.image.load(victory_bg_path).convert()
 
     # Idle
     knight_idle_path = os.path.join(base_path, "asset", "IDLE.png")
@@ -241,6 +262,75 @@ def load_assets():
     fh = attack_sheet.get_height()
     goblin_knight["attack"] = load_animation_frames(attack_sheet, row=0, num_frames=10, frame_width=fw, frame_height=fh, scale=1.0)
 
+    # Arrow
+    arrow_path = os.path.join(base_path, "asset", "arrow.png")
+    arrow_image = pygame.image.load(arrow_path).convert_alpha()
+
+    # Fireball
+    fireball_sheet = pygame.image.load(os.path.join(base_path, "asset", "Fireball.png")).convert_alpha()
+    fireball_frames = load_animation_frames(fireball_sheet, row=0, num_frames=6, frame_width=32, frame_height=32, scale=1)
+
+    # Sound Effect
+    attack_sound_path = os.path.join(base_path, "asset", "attack.ogg")
+    attack_sound = pygame.mixer.Sound(attack_sound_path)
+    attack_sound.set_volume(0.7)  # 0.0 hingga 1.0
+
+    jump_sound_path = os.path.join(base_path, "asset", "jump.ogg")
+    jump_sound = pygame.mixer.Sound(jump_sound_path)
+    jump_sound.set_volume(1.0)  # opsional
+
+    hurt_sound_path = os.path.join(base_path, "asset", "hurt.wav")
+    hurt_sound = pygame.mixer.Sound(hurt_sound_path)
+    hurt_sound.set_volume(1.0)  # opsional
+
+    parry_sound_path = os.path.join(base_path, "asset", "parry.wav")
+    parry_sound = pygame.mixer.Sound(parry_sound_path)
+    parry_sound.set_volume(1.0)  # opsional
+
+    walk_sound_path = os.path.join(base_path, "asset", "walk.wav")
+    walk_sound = pygame.mixer.Sound(walk_sound_path)
+    walk_sound.set_volume(1.0)
+
+    dead_sound_path = os.path.join(base_path, "asset", "dead.wav")
+    dead_sound = pygame.mixer.Sound(dead_sound_path)
+    dead_sound.set_volume(1.0)
+
+    drink_sound_path = os.path.join(base_path, "asset", "drink.wav")
+    drink_sound = pygame.mixer.Sound(drink_sound_path)
+    drink_sound.set_volume(1.0)
+
+    goblin_death_path = os.path.join(base_path, "asset", "goblin_death.wav")
+    goblin_death_sound = pygame.mixer.Sound(goblin_death_path)
+    goblin_death_sound.set_volume(1.0)
+
+    hit_goblin_path = os.path.join(base_path, "asset", "hit_goblin.wav")
+    hit_goblin_sound = pygame.mixer.Sound(hit_goblin_path)
+    hit_goblin_sound.set_volume(1.0)
+
+    arrow_sound_path = os.path.join(base_path, "asset", "arrow.wav")
+    arrow_sound = pygame.mixer.Sound(arrow_sound_path)
+    arrow_sound.set_volume(1.0)
+
+    slash_goblin_path = os.path.join(base_path, "asset", "slash_goblin.wav")
+    slash_goblin_sound = pygame.mixer.Sound(slash_goblin_path)
+    slash_goblin_sound.set_volume(1.0)
+
+    fireball_sound_path = os.path.join(base_path, "asset", "fireball.wav")
+    fireball_sound = pygame.mixer.Sound(fireball_sound_path)
+    fireball_sound.set_volume(1.0)
+
+    summon_path = os.path.join(base_path, "asset", "summon.wav")
+    summon_sound = pygame.mixer.Sound(summon_path)
+    summon_sound.set_volume(1.0)
+
+    shaman = {
+        "idle": load_sheet_shaman(base_path, "Idle_SH", 8),
+        "move": load_sheet_shaman(base_path, "Move_SH", 8),
+        "attack": load_sheet_shaman(base_path, "Attack_SH", 8),
+        "hit": load_sheet_shaman(base_path, "Take Hit_SH", 4),
+        "death": load_sheet_shaman(base_path, "Death_SH", 5)
+    }
+
     # Kembalikan dictionary lengkap
     assets = {
         "health_bar": health_bar_frames,
@@ -260,7 +350,24 @@ def load_assets():
         "shield_potion": shield_potion_img,
         "archer": archer_frames,
         "goblin_knight": goblin_knight,
-
+        "shaman": shaman,
+        "arrow": arrow_image,
+        "boss_room_platform": boss_room_image,
+        "boss_fireball": fireball_frames,
+        "attack_sound": attack_sound,
+        "jump_sound": jump_sound,
+        "hurt_sound": hurt_sound,
+        "parry_sound": parry_sound,
+        "walk_sound": walk_sound,
+        "dead_sound": dead_sound,
+        "drink_sound": drink_sound,
+        "goblin_death_sound": goblin_death_sound,
+        "hit_goblin_sound": hit_goblin_sound,
+        "arrow_sound": arrow_sound,
+        "slash_goblin_sound": slash_goblin_sound,
+        "fireball_sound": fireball_sound,
+        "summond_sound": summon_sound,
+        "victory_bg": victory_bg,
     }
 
     return assets
