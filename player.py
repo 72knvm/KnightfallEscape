@@ -8,7 +8,7 @@ def find_spawn_y(platforms, spawn_x, player_height):
     return highest.rect.top - player_height
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, x, y, enemies, idle_frames, walk_right_frames, walk_left_frames, jump_frames, attack_frames, hurt_frames, platforms=None):
+    def __init__(self, x, y, enemies, idle_frames, walk_right_frames, walk_left_frames, jump_frames, attack_frames, hurt_frames, platforms=None, assets=None):
         super().__init__()
         self.idle_frames = idle_frames
         self.walk_right_frames = walk_right_frames
@@ -16,11 +16,14 @@ class Player(pygame.sprite.Sprite):
         self.jump_frames = jump_frames
         self.attack_frames = attack_frames
         self.hurt_frames = hurt_frames
-
+        self.assets = assets
         self.frame_index = 0
         self.current_frames = self.idle_frames
         self.image = self.current_frames[self.frame_index]
         self.rect = self.image.get_rect(topleft=(x, y))
+
+        self.walk_sound_timer = 0
+        self.walk_sound_delay = 550
 
         self.animation_speed = 0.1
         self.frame_timer = 0
@@ -114,9 +117,15 @@ class Player(pygame.sprite.Sprite):
                 self.rect = self.image.get_rect()
                 self.rect.center = center
 
-                if self.attack_frame_index in [1, 2] and not self.has_dealt_damage:
-                    self.deal_damage()
-                    self.has_dealt_damage = True
+                # 🎵 Mainkan sound effect hanya di frame ke-2
+                if self.attack_frame_index == 2 and self.assets and "attack_sound" in self.assets:
+                    self.assets["attack_sound"].stop()
+                    self.assets["attack_sound"].play()
+
+                if self.attack_frame_index == 1:
+                    if not self.has_dealt_damage:
+                        self.deal_damage()
+                        self.has_dealt_damage = True
             else:
                 self.attacking = False
                 self.attack_frame_index = 0
@@ -150,6 +159,11 @@ class Player(pygame.sprite.Sprite):
             self.parry_start_time = current_time
             self.parry_frame_index = 0
             self.parry_frame_timer = 0
+
+            if self.assets and "parry_sound" in self.assets:
+                self.assets["parry_sound"].stop()
+                self.assets["parry_sound"].play()
+
             if self.parry_frames:
                 self.image = self.parry_frames[0] if self.facing_right else pygame.transform.flip(self.parry_frames[0], True, False)
 
@@ -187,20 +201,28 @@ class Player(pygame.sprite.Sprite):
             self.update_attack_animation(dt)
             return
 
-        if keys[pygame.K_a]:
-            self.collision_rect.x -= self.speed
+        if keys[pygame.K_a] or keys[pygame.K_d]:
+            if keys[pygame.K_a]:
+                self.collision_rect.x -= self.speed
+                self.facing_right = False
+            elif keys[pygame.K_d]:
+                self.collision_rect.x += self.speed
+                self.facing_right = True
+
             self.handle_horizontal_collision(platforms)
+
             self.is_running = True
-            self.facing_right = False
-        elif keys[pygame.K_d]:
-            self.collision_rect.x += self.speed
-            self.handle_horizontal_collision(platforms)
-            self.is_running = True
-            self.facing_right = True
+
+            current_time = pygame.time.get_ticks()
+            if current_time - self.walk_sound_timer >= self.walk_sound_delay:
+                if self.on_ground and self.assets and "walk_sound" in self.assets:
+                    self.assets["walk_sound"].stop()  # mencegah tumpang tindih
+                    self.assets["walk_sound"].play()
+                    self.walk_sound_timer = current_time
         else:
             if self.is_running:
-                self.frame_index = 0
-            self.is_running = False
+                self.is_running = False
+            self.frame_index = 0
 
         if not self.on_ground:
             new_frames = [pygame.transform.flip(f, True, False) for f in self.jump_frames] if not self.facing_right else self.jump_frames
@@ -224,6 +246,9 @@ class Player(pygame.sprite.Sprite):
         if keys[pygame.K_SPACE] and self.on_ground:
             self.vel_y = self.jump_power
             self.on_ground = False
+            if self.assets and "jump_sound" in self.assets:
+                self.assets["jump_sound"].stop()
+                self.assets["jump_sound"].play()
 
         self.vel_y += self.gravity
         self.collision_rect.y += self.vel_y
@@ -239,7 +264,7 @@ class Player(pygame.sprite.Sprite):
                 frame = self.attack_frames[0]
                 self.image = frame if self.facing_right else pygame.transform.flip(frame, True, False)
                 self.last_attack_time = current_time
-                self.has_dealt_damage = False
+                self.has_dealt_damage = False                
 
     def check_item_collision(self):
         for item in list(self.items):
@@ -249,6 +274,10 @@ class Player(pygame.sprite.Sprite):
                 item.kill()
 
     def apply_item_effect(self, item):
+        if self.assets and "drink_sound" in self.assets:
+            self.assets["drink_sound"].stop()
+            self.assets["drink_sound"].play()
+
         if item.type == 'health':
             self.lives = min(self.lives + 1, 5)  # Hindari lebih dari 5
             print("❤️ Nyawa bertambah!")
@@ -272,6 +301,10 @@ class Player(pygame.sprite.Sprite):
             self.lives -= damage
             self.last_damage_time = current_time
 
+            if self.assets and "hurt_sound" in self.assets:
+                self.assets["hurt_sound"].stop()
+                self.assets["hurt_sound"].play()
+
             if self.lives > 0:
                 self.is_hurt = True
                 self.hurt_start_time = current_time
@@ -282,6 +315,11 @@ class Player(pygame.sprite.Sprite):
                 print(f"💢 Player terkena damage! Nyawa tersisa: {self.lives}")
             else:
                 print("💀 Player mati! Memainkan animasi death...")
+
+                if self.assets and "dead_sound" in self.assets:
+                    self.assets["dead_sound"].stop()
+                    self.assets["dead_sound"].play()
+
                 self.is_invulnerable = True
                 self.playing_death = True
                 self.death_frame_index = 0
