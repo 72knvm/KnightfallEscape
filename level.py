@@ -20,8 +20,9 @@ class Level:
         self.player = player  # Simpan objek player yang diterima
         self.assets = assets
         self.platforms = pygame.sprite.Group()
+        self.fireball_group = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
-        self.boss = None
+        self.boss_spawned = False
         self.portal = None  # untuk menyimpan item portal
 
         self.state = self._get_state_from_level()
@@ -130,6 +131,64 @@ class Level:
             self.spawn_random_goblins(count=7)
 
 
+    def get_floor_y(self, x_pos):
+        for p in self.platforms:
+            if p.rect.left <= x_pos <= p.rect.right:
+                return p.rect.top
+        return 550  # fallback jika tidak ketemu
+
+    def trigger_boss(self):
+        if self.boss_spawned:
+            return
+
+        print("🧟‍♂️ Boss muncul!")
+
+        from boss_saman import BossSaman
+
+        # Posisi tengah arena
+        boss_x = self.arena_x + 500 - 30
+
+        # Ambil tinggi lantai di lokasi boss
+        floor_y = self.get_floor_y(boss_x)
+
+        # Ambil tinggi boss dari salah satu frame animasi idle
+        boss_idle_frame = self.assets["shaman"]["idle"][0]
+        boss_height = boss_idle_frame.get_height()
+
+        # Naikkan sedikit untuk kompensasi pixel-bottom
+        boss_y = floor_y - boss_height - 10
+
+        # Buat objek boss
+        boss = BossSaman(
+            x=boss_x,
+            y=boss_y,
+            fireball_group=self.fireball_group,
+            enemy_group=self.enemies,
+            assets=self.assets
+        )
+        self.enemies.add(boss)
+
+        # Jangan set .rect.bottom lagi agar posisi boss_y tidak tertimpa
+
+        # Tutup dinding kiri (agar player tidak kabur)
+        wall_thickness = 30
+        room_x = self.arena_x
+        room_y = min(p.rect.y for p in self.platforms)
+        max_y = max(p.rect.bottom for p in self.platforms)
+        wall_height = max_y - room_y
+
+        wall_fill = Platform(
+            room_x,
+            room_y,
+            wall_thickness,
+            wall_height,
+            image=self.assets["platform"]
+        )
+        self.platforms.add(wall_fill)
+
+        print("🚪 Dinding tertutup!")
+        self.boss_spawned = True
+
     def build_level(self):
         if self.level_number == 1:
             self.build_level_1()
@@ -156,11 +215,11 @@ class Level:
         self.portal = None  # untuk menyimpan portal animasi
 
         weighted_blocks = [
-            (block_flat_corridor, 1),
-            (block_platform_high, 3),
-            (block_gap_bridge, 2),
-            (block_step_up, 2),
-            (block_multi_path, 2)
+            (lambda x: block_flat_corridor(x, self.assets), 1),
+            (lambda x: block_platform_high(x, self.assets), 3),
+            (lambda x: block_gap_bridge(x, self.assets), 2),
+            (lambda x: block_step_up(x, self.assets), 2),
+            (lambda x: block_multi_path(x, self.assets), 2)
         ]
 
         def weighted_choice(pairs, k):
@@ -201,7 +260,7 @@ class Level:
         self.spawn_random_potions(count=3)
 
         self._add_enemies()
-        print("Level 1 dengan musuh Goblin sudah dibuat")
+        print("✅ Level 1 dengan gambar platform baru selesai dibuat.")
 
     def build_level_2(self):
         self.platforms.empty()
@@ -209,11 +268,11 @@ class Level:
         self.portal = None  # untuk menyimpan portal animasi
 
         weighted_blocks = [
-            (block_flat_corridor, 0.5),
-            (block_platform_high, 3),
-            (block_gap_bridge, 4),
-            (block_step_up, 4),
-            (block_multi_path, 4)
+            (lambda x: block_flat_corridor(x, self.assets), 0.5),
+            (lambda x: block_platform_high(x, self.assets), 3),
+            (lambda x: block_gap_bridge(x, self.assets), 4),
+            (lambda x: block_step_up(x, self.assets), 4),
+            (lambda x: block_multi_path(x, self.assets), 4)
         ]
 
         def weighted_choice(pairs, k):
@@ -254,7 +313,7 @@ class Level:
         self.spawn_random_potions(count=4)
         self._add_enemies()
 
-        print("Level 2 dengan portal dan potion sudah dibuat")
+        print("✅ Level 2 dengan gambar platform baru selesai dibuat")
 
     def build_level_3(self):
         self.platforms.empty()
@@ -262,11 +321,11 @@ class Level:
         self.portal = None  # untuk menyimpan portal animasi
 
         weighted_blocks = [
-            (block_flat_corridor, 0.2),
-            (block_platform_high, 5),
-            (block_gap_bridge, 6),
-            (block_step_up, 5),
-            (block_multi_path, 5)
+            (lambda x: block_flat_corridor(x, self.assets), 0.2),
+            (lambda x: block_platform_high(x, self.assets), 5),
+            (lambda x: block_gap_bridge(x, self.assets), 6),
+            (lambda x: block_step_up(x, self.assets), 5),
+            (lambda x: block_multi_path(x, self.assets), 5)
         ]
 
         def weighted_choice(pairs, k):
@@ -309,7 +368,7 @@ class Level:
         # ✅ Lalu musuh
         self._add_enemies()
 
-        print("Level 3 dengan portal dan potion sudah dibuat")
+        print("✅ Level 3 dengan gambar platform baru selesai dibuat")
 
     def build_level_4(self):
         self.platforms.empty()
@@ -317,11 +376,11 @@ class Level:
         self.portal = None  # menyimpan portal animasi
 
         weighted_blocks = [
-            (block_flat_corridor, 0.05),
-            (block_platform_high, 6),
-            (block_gap_bridge, 7),
-            (block_step_up, 6),
-            (block_multi_path, 6)
+            (lambda x: block_flat_corridor(x, self.assets), 0.05),
+            (lambda x: block_platform_high(x, self.assets), 6),
+            (lambda x: block_gap_bridge(x, self.assets), 7),
+            (lambda x: block_step_up(x, self.assets), 6),
+            (lambda x: block_multi_path(x, self.assets), 6)
         ]
 
         def weighted_choice(pairs, k):
@@ -364,7 +423,7 @@ class Level:
         # ✅ Baru musuh
         self._add_enemies()
 
-        print("Level 4 dengan portal dan potion sudah dibuat")
+        print("✅ Level 4 dengan gambar platform baru selesai dibuat")
 
     def build_level_5(self):
         self.platforms.empty()
@@ -373,11 +432,11 @@ class Level:
         self.portal = None  # simpan portal animasi
 
         weighted_blocks = [
-            (block_flat_corridor, 0.1),
-            (block_platform_high, 4),
-            (block_gap_bridge, 5),
-            (block_step_up, 5),
-            (block_multi_path, 4),
+            (lambda x: block_flat_corridor(x, self.assets), 0.1),
+            (lambda x: block_platform_high(x, self.assets), 4),
+            (lambda x: block_gap_bridge(x, self.assets), 5),
+            (lambda x: block_step_up(x, self.assets), 5),
+            (lambda x: block_multi_path(x, self.assets), 4),
         ]
 
         def weighted_choice(pairs, k):
@@ -428,54 +487,108 @@ class Level:
         # ✅ Lalu musuh
         self._add_enemies()
 
-        print("Level 5 dengan portal dan potion sudah dibuat")
+        print("✅ Level 5 dengan gambar platform baru selesai dibuat")
 
     def build_level_shaman(self):
         self.platforms.empty()
+        self.enemies.empty()
+        self.portal = None  # Tidak ada portal untuk boss level
+        self.items = pygame.sprite.Group()  # Hindari error 'items' tidak ditemukan
 
-        # === Desain Lorong Panjang (blok modular) ===
+        # === LORONG MASUK ===
         corridor_width = 100
         corridor_height = 50
-        corridor_length = 20
-        corridor_x = 0
+        corridor_length = 6
         corridor_y = 550
+        corridor_x = 0
 
-        # Membuat lorong panjang
         for i in range(corridor_length):
-            platform = Platform(corridor_x, corridor_y + i * corridor_height, corridor_width, corridor_height)
+            platform = Platform(
+                corridor_x + i * corridor_width,
+                corridor_y,
+                corridor_width,
+                corridor_height,
+                image=self.assets["platform"]
+            )
             self.platforms.add(platform)
 
-        # === Pintu Besar Menuju Ruang Boss ===
-        door_width = 300
-        door_height = 50
-        door_x = corridor_x + corridor_length * corridor_width - door_width  # Posisi pintu di akhir lorong
-        door_y = corridor_y + 20
-        door = Platform(door_x, door_y, door_width, door_height)
-        self.platforms.add(door)
+        # === ARENA BOSS ===
+        room_width = 1300
+        room_height = 400
+        room_vertical_offset = 0
+        room_x = corridor_x + corridor_length * corridor_width
+        room_y = corridor_y - room_height - room_vertical_offset
+        self.arena_x = room_x
 
-        # === Ruang Boss ===
-        boss_room_x = door_x + door_width
-        boss_room_y = door_y - 200
-        boss_room_width = 1200
-        boss_room_height = 600
+        wall_thickness = 30
 
-        # Lantai ruang boss
-        floor = Platform(boss_room_x, boss_room_y + boss_room_height, boss_room_width, 50)
+        # Lantai
+        floor = Platform(room_x, room_y + room_height, room_width, 50, image=self.assets["platform"])
         self.platforms.add(floor)
 
-        # Langit-langit ruang boss
-        ceiling = Platform(boss_room_x, boss_room_y + boss_room_height - 100, boss_room_width, 30)
+        # Langit-langit
+        ceiling = Platform(room_x, room_y, room_width, wall_thickness, image=self.assets["platform"])
         self.platforms.add(ceiling)
 
-        # Dinding kiri dan kanan ruang boss
-        wall_left = Platform(boss_room_x, boss_room_y + boss_room_height - 150, 30, boss_room_height)
-        self.platforms.add(wall_left)
+        # Dinding kiri (dengan celah)
+        wall_left_top = Platform(
+            room_x,
+            room_y,
+            wall_thickness,
+            200,  # atas
+            image=self.assets["platform"]
+        )
+        wall_left_bottom = Platform(
+            room_x,
+            room_y + room_height,  # bawah (tinggi 0)
+            wall_thickness,
+            0,
+            image=self.assets["platform"]
+        )
+        self.platforms.add(wall_left_top, wall_left_bottom)
 
-        wall_right = Platform(boss_room_x + boss_room_width - 30, boss_room_y + boss_room_height - 150, 30, boss_room_height)
+        # Dinding kanan
+        wall_right = Platform(
+            room_x + room_width - wall_thickness,
+            room_y,
+            wall_thickness,
+            room_height + 50,
+            image=self.assets["platform"]
+        )
         self.platforms.add(wall_right)
 
-        print("Shaman Boss Room")
-        
+        # Platform tengah
+        platform_mid = Platform(
+            room_x + room_width // 2 - 75,
+            room_y + 220,
+            350,
+            20,
+            image=self.assets["platform"]
+        )
+        self.platforms.add(platform_mid)
+
+        # Platform kiri dan kanan atas
+        platform_left = Platform(
+            room_x + 150,
+            room_y + 300,
+            300,
+            20,
+            image=self.assets["platform"]
+        )
+        platform_right = Platform(
+            room_x + room_width - 150 - 120,
+            room_y + 300,
+            200,
+            20,
+            image=self.assets["platform"]
+        )
+        self.platforms.add(platform_left, platform_right)
+
+        # Potion
+        self.spawn_random_potions(count=2)
+
+        print("✅ Layout Throne Room Level 6 (Shaman) dengan celah masuk telah dibangun.")
+
 class LevelManager:
     def __init__(self, player, assets):
         self.current_level = 1
@@ -509,48 +622,48 @@ class LevelManager:
 
 # === Modular Block Definitions ===
 
-def block_flat_corridor(x):
+def block_flat_corridor(x, assets):
     width = 700
-    platforms = [Platform(x, 550, width, 50)]
+    platforms = [Platform(x, 550, width, 50, image=assets["platform"])]
     return platforms, width
 
-def block_platform_high(x):
+def block_platform_high(x, assets):
     width = 700
     platforms = [
-        Platform(x, 500, 200, 30),
-        Platform(x + 250, 400, 200, 30),
-        Platform(x + 500, 300, 200, 30)
+        Platform(x, 500, 200, 30, image=assets["platform"]),
+        Platform(x + 250, 400, 200, 30, image=assets["platform"]),
+        Platform(x + 500, 300, 200, 30, image=assets["platform"])
     ]
     return platforms, width
 
-def block_gap_bridge(x):
+def block_gap_bridge(x, assets):
     left = 400
     gap = 120
     right = 400
     width = left + gap + right
     platforms = [
-        Platform(x, 550, left, 50),
-        Platform(x + left + gap, 550, right, 50)
+        Platform(x, 550, left, 50, image=assets["platform"]),
+        Platform(x + left + gap, 550, right, 50, image=assets["platform"])
     ]
     return platforms, width
 
-def block_step_up(x):
+def block_step_up(x, assets):
     width = 700
     gap = 50
     platforms = [
-        Platform(x, 550, 200, 50),
-        Platform(x + 220 + gap, 500, 200, 100),     # tambah gap di sini
-        Platform(x + 440 + 2 * gap, 450, 200, 150)  # tambah gap di sini
+        Platform(x, 550, 200, 50, image=assets["platform"]),
+        Platform(x + 220 + gap, 500, 200, 100, image=assets["platform"]),
+        Platform(x + 440 + 2 * gap, 450, 200, 150, image=assets["platform"])
     ]
     return platforms, width
 
-def block_multi_path(x):
+def block_multi_path(x, assets):
     width = 700
     platforms = [
-        Platform(x, 550, 300, 50),
-        Platform(x + 350, 550, 300, 50),
-        Platform(x + 150, 450, 150, 30),
-        Platform(x + 400, 400, 150, 30)
+        Platform(x, 550, 300, 50, image=assets["platform"]),
+        Platform(x + 350, 550, 300, 50, image=assets["platform"]),
+        Platform(x + 150, 450, 150, 30, image=assets["platform"]),
+        Platform(x + 400, 400, 150, 30, image=assets["platform"])
     ]
     return platforms, width
 
