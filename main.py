@@ -4,7 +4,9 @@ import os
 from level import LevelManager, Level
 from player import Player
 from assets import load_assets
+from boss_saman import BossSaman
 
+pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
 WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -35,6 +37,8 @@ walk_left_frames = assets['walk_left']
 boss_group = pygame.sprite.Group()
 boss_spawned = False
 cutscene_active = False
+
+boss_defeated = False
 
 cutscene_lines = [
     "Saman: Hmm...? Seorang manusia...?",
@@ -77,7 +81,16 @@ def show_level_menu():
     base_y = 100
     spacing = 60
 
-    for i in range(1, 6):
+    level_labels = {
+        1: "Level 1",
+        2: "Level 2",
+        3: "Level 3",
+        4: "Level 4",
+        5: "Level 5",
+        6: "Boss: Shaman"  # ⬅️ Ini label khusus
+    }
+
+    for i in range(1,7):
         rect = font.render(f"Level {i}", True, (255, 255, 255)).get_rect(center=(WIDTH // 2, base_y + i * spacing))
         level_buttons.append((i, rect))
 
@@ -246,7 +259,7 @@ def show_pause_menu():
 def game_over_menu():
     font = cinzel_font_medium
     while True:
-        screen.fill((0, 0, 0))
+        screen.blit(pygame.transform.scale(assets["level_bg"], (WIDTH, HEIGHT)), (0, 0))
         game_over_text = font.render("GAME OVER", True, (255, 0, 0))
         retry_text = font.render("Ulangi", True, (0, 255, 0))
         exit_text = font.render("Keluar", True, (255, 0, 0))
@@ -272,6 +285,40 @@ def game_over_menu():
         pygame.display.flip()
         clock.tick(60)
 
+def show_victory_menu():
+    font = cinzel_font_medium
+    play_music("Backsound/victory.mp3", loop=False)
+    while True:
+        screen.blit(pygame.transform.scale(assets["victory_bg"], (WIDTH, HEIGHT)), (0, 0))
+
+        mouse_pos = pygame.mouse.get_pos()
+        mouse_click = pygame.mouse.get_pressed()
+
+        # === Victory Title ===
+        victory_text = "VICTORY!"
+        victory_rect = font.render(victory_text, True, (255, 255, 0)).get_rect(center=(WIDTH // 2, 200))
+        draw_text_with_shadow(screen, victory_text, font, (255, 255, 0), victory_rect.topleft)
+
+        # === Main Menu Button ===
+        menu_color = (0, 255, 0)
+        hover_color = (100, 255, 100)
+
+        menu_rect = font.render("Main Menu", True, menu_color).get_rect(center=(WIDTH // 2, 350))
+        if menu_rect.collidepoint(mouse_pos):
+            draw_text_with_shadow(screen, "Main Menu", font, hover_color, menu_rect.topleft)
+            if mouse_click[0]:
+                return "victory_main_menu"
+        else:
+            draw_text_with_shadow(screen, "Main Menu", font, menu_color, menu_rect.topleft)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        pygame.display.flip()
+        clock.tick(60)
+        
 def show_resolution_selector():
     font = cinzel_font_medium
     resolutions = [
@@ -533,7 +580,8 @@ player = Player(
     assets['jump'],        # jump frames (list)
     assets['attack'],       # attack frames (list)
     assets['hurt'],         # hit frames
-    platforms=level.platforms
+    platforms=level.platforms,
+    assets=assets
 )
 player.parry_frames = assets['parry']
 player.death_frames = assets["death"]
@@ -587,12 +635,13 @@ while running:
         keys = pygame.key.get_pressed()
         player.update(level.platforms, keys, dt)
 
+        if level.level_number == 6 and not level.boss_spawned:
+            if player.rect.x > level.arena_x + 100:  # offset 50 px dari gerbang masuk
+                level.trigger_boss()
+
         if player.is_game_over and not player.playing_death:
             game_over = True
-
-        for enemy in level.enemies:
-            enemy.update(level.platforms, player)
-
+                    
         # Hitung posisi kamera dengan viewport konstan
         camera_x = player.rect.centerx - VIEWPORT_WIDTH // 2
         camera_y = player.rect.centery - VIEWPORT_HEIGHT // 2
@@ -631,27 +680,83 @@ while running:
             if player.rect.colliderect(level.portal.rect):
                 level_manager.go_to_next_level()
 
+
+        for fireball in level.fireball_group:
+            screen.blit(fireball.image, fireball.rect)
+
         # Render musuh dan projectile ke viewport surface
         for enemy in level.enemies:
-            viewport_surface.blit(enemy.image, (enemy.rect.x - camera_x, enemy.rect.y - camera_y))
-            pygame.draw.rect(viewport_surface, (255, 0, 0), enemy.rect.move(-camera_x, -camera_y), 2)
-            for proj in enemy.projectiles:
-                viewport_surface.blit(proj.image, (proj.rect.x - camera_x, proj.rect.y - camera_y))
-                if proj.rect.colliderect(player.rect):
-                    if player.parrying:
-                        print("🛡️ Parry berhasil!")
-                        proj.kill()
-                    else:
-                        print("💥 Player terkena panah!")
-                        player.take_damage()
-                        proj.kill()
+            enemy.update(level.platforms, player)
 
+            # Gambar musuh ke viewport
+            viewport_surface.blit(enemy.image, (enemy.rect.x - camera_x, enemy.rect.y - camera_y))
+
+            # Update dan gambar semua projectile dari musuh (misal goblin archer)
+            if hasattr(enemy, "projectiles"):
+                enemy.projectiles.update()
+                for proj in enemy.projectiles:
+                    # Gambar panah ke viewport sesuai kamera
+                    viewport_surface.blit(proj.image, (proj.rect.x - camera_x, proj.rect.y - camera_y))
+
+                    # Cek tabrakan dengan player
+                    if proj.rect.colliderect(player.rect):
+                        if player.parrying:
+                            proj.kill()
+                            print("🛡️ Parry berhasil!")
+                        else:
+                            proj.kill()
+                            player.take_damage()
+                            print("💥 Player terkena panah!")
+                            
         # Render player ke viewport surface
         player.draw(viewport_surface, camera_x, camera_y)
 
         # Render boss ke viewport surface
         for boss in boss_group:
             viewport_surface.blit(boss.image, (boss.rect.x - camera_x, boss.rect.y - camera_y))
+
+        # Cek apakah boss telah kalah
+        if level.level_number == 6 and level.boss_spawned and not boss_defeated:
+            all_boss_dead = all(
+                isinstance(e, BossSaman) and hasattr(e, "alive") and not e.alive
+                for e in level.enemies
+                if isinstance(e, BossSaman)
+            )
+            if all_boss_dead:
+                boss_defeated = True
+                print("🎉 Semua boss kalah, menampilkan UI Victory!")
+                stop_music()
+                choice = show_victory_menu()
+                if choice == "victory_main_menu":
+                    stop_music()
+                    boss_defeated = False  # reset untuk sesi baru
+                    while True:
+                        selected_level = show_main_menu()
+                        if isinstance(selected_level, int):
+                            break
+
+                    level = Level(selected_level, None, assets)
+                    player = Player(
+                        100, 400, level.enemies,
+                        assets['idle'],
+                        assets['walk_right'],
+                        assets['walk_left'],
+                        assets['jump'],
+                        assets['attack'],
+                        assets['hurt'],
+                        platforms=level.platforms,
+                        assets=assets
+                    )
+                    player.parry_frames = assets['parry']
+                    player.death_frames = assets["death"]
+
+                    level.player = player
+                    player.items = level.items
+                    level_manager.current_level = selected_level
+                    level_manager.level = level
+                    update_max_width()
+                    play_music("Backsound/Level Song.mp3")
+                    continue
 
         # Bersihkan layar utama
         screen.fill((0, 0, 0))  # latar hitam
@@ -663,8 +768,14 @@ while running:
         # Render UI biasa (langsung di screen, tanpa scaling)
         draw_text(f"Level: {level.level_number}", 10, 10)
 
-        health_bar_frame = assets["health_bar"][5 - max(0, min(player.lives, 5))]
-        screen.blit(health_bar_frame, (10, 10))  # atau posisikan sesuai keinginan
+        # Menampilkan health bar
+        health_bar_frames = assets["health_bar"]
+        if player.shield_hits > 0:
+            frame = health_bar_frames[6]  # frame khusus shield
+        else:
+            frame = health_bar_frames[5 - max(0, min(player.lives, 5))]
+
+        screen.blit(frame, (10, 10))
 
         if level_manager.current_level != level.level_number:
             level = level_manager.level
@@ -700,8 +811,8 @@ while running:
                 assets['jump'],
                 assets['attack'],
                 assets['hurt'],
-                platforms=level.platforms
-
+                platforms=level.platforms,
+                assets=assets
             )
             player.parry_frames = assets['parry']
             player.death_frames = assets["death"]
@@ -726,7 +837,9 @@ while running:
                 assets['walk_left'],
                 assets['jump'],
                 assets['attack'],
-                assets['hurt']
+                assets['hurt'],
+                platforms=level.platforms,
+                assets=assets,
             )
             player.parry_frames = assets['parry']
             player.death_frames = assets["death"]
