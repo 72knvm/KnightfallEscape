@@ -679,7 +679,8 @@ while running:
 
             if player.rect.colliderect(level.portal.rect):
                 level_manager.go_to_next_level()
-
+                level = level_manager.level
+                update_max_width()   
 
         for fireball in level.fireball_group:
             screen.blit(fireball.image, fireball.rect)
