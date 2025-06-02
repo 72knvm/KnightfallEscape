@@ -1,0 +1,19 @@
+import pygame
+
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self, x, y, image):
+        super().__init__()
+        self.image = image
+        self.rect = self.image.get_rect(topleft=(x, y))
+        self.health = 100  # default nyawa musuh
+
+    def update(self, *args):
+        # Override di subclass untuk behavior spesifik
+        pass
+
+    def take_damage(self, amount):
+        self.health -= amount
+        if self.health <= 0:
+            self.kill()  # hapus sprite dari semua grup
+            print("Enemy mati!")
+            
